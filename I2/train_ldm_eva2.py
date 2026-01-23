@@ -64,7 +64,7 @@ def main():
     
     # 基础设置
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    output = os.path.join(args.output_dir, 'I2SB_3D_output_ema')
+    output = os.path.join(args.output_dir, 'I2SB_3D_output_ema_ad_mci_nc')
     log_dir = os.path.join(output, 'logs')
     os.makedirs(output, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
