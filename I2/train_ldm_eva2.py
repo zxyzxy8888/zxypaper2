@@ -20,7 +20,7 @@ from split_dataset import get_paired_files_with_subjects, split_by_subject
 from performance_metric import mean_absolute_error, peak_signal_to_noise_ratio, structural_similarity_index
 
 # --- 核心组件 ---
-from model import Image3DNet  
+from model_linear_att import Image3DNet  
 from i2_diffusion import Diffusion  
 
 def get_beta_schedule(beta_start, beta_end, num_diffusion_timesteps):
@@ -53,9 +53,9 @@ def main():
     parser.add_argument('--timesteps', type=int, default=700, help='扩散步数')
     parser.add_argument('--use_attention', action='store_true', help='是否开启Attention')
     parser.add_argument('--resume', action='store_true', help='是否从 best_i2sb_model.pth 继续训练')
-    parser.add_argument('--start_epoch', type=int, default=0, help='手动指定开始的 Epoch (续训时填入断点)')
+    parser.add_argument('--start_epoch', type=int, default=65, help='手动指定开始的 Epoch (续训时填入断点)')
     # 如果你知道上次最好的 MAE，可以在命令行指定，防止好模型被覆盖。不知道就默认 0.0526 (你现在的最佳)
-    parser.add_argument('--prev_best_mae', type=float, default=float('inf'), help='续训前的最佳验证集 MAE')
+    parser.add_argument('--prev_best_mae', type=float, default=0.0488, help='续训前的最佳验证集 MAE')
     
     args = parser.parse_args()
     
@@ -64,7 +64,7 @@ def main():
     
     # 基础设置
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    output = os.path.join(args.output_dir, 'I2SB_3D_output_ema_ad_mci_nc')
+    output = os.path.join(args.output_dir, 'I2SB_3D_output_ema_ad_mci_nc_linear_att')
     log_dir = os.path.join(output, 'logs')
     os.makedirs(output, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
@@ -126,7 +126,21 @@ def main():
     
     # 串联在一起
     lr_scheduler = SequentialLR(optimizer, schedulers=[scheduler_warmup, scheduler_decay], milestones=[warmup_steps])
+    if args.resume and args.start_epoch > 0:
+        # 计算已经过去的步数
+        past_steps = args.start_epoch * steps_per_epoch
+        logger.info(f"Resuming: Fast-forwarding LR Scheduler for {past_steps} steps to match Epoch {args.start_epoch}...")
+        
+        # 这一步非常快 (纯数学运算)，不仅更新调度器内部计数器，也会将 optimizer 的 lr 设置正确
+        # 避免了重新 Warmup 和 学习率突增
+        for _ in range(past_steps):
+            lr_scheduler.step()
+    
     global_step = 0 # 用于记录总步数 (Tensorboard)
+    # 注意：如果是续训，global_step 用于 tensorboard 记录，也应该接上
+    if args.resume:
+        global_step = args.start_epoch * steps_per_epoch
+        
     def get_val_steps(total_steps, val_steps):
         # 生成 [0, 20, 40, ..., 980] 这样的 50 个点
         indices = np.linspace(0, total_steps - 1, val_steps, dtype=int)
@@ -179,8 +193,6 @@ def main():
                 current_lr = optimizer.param_groups[0]['lr']
                 writer.add_scalar("train/lr", current_lr, global_step)
                 global_step += 1
-            # 这里的 postfix 仅显示最后一次计算的 loss
-            progress_bar.set_postfix({"loss": f"{loss.item() * args.grad_accum_steps:.4f}"})
         writer.add_scalar("train/loss", epoch_loss / (step + 1), epoch)
         # 5. 验证循环 (保持不变)
         if (epoch + 1) % args.val_interval == 0:
