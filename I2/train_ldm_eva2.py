@@ -49,13 +49,13 @@ def main():
     
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='学习率')
     parser.add_argument('--device', type=str, default='cuda', help='设备')
-    parser.add_argument('--val_interval', type=int, default=1, help='验证间隔')
+    parser.add_argument('--val_interval', type=int, default=3, help='验证间隔')
     parser.add_argument('--timesteps', type=int, default=700, help='扩散步数')
     parser.add_argument('--use_attention', action='store_true', help='是否开启Attention')
     parser.add_argument('--resume', action='store_true', help='是否从 best_i2sb_model.pth 继续训练')
-    parser.add_argument('--start_epoch', type=int, default=65, help='手动指定开始的 Epoch (续训时填入断点)')
+    parser.add_argument('--start_epoch', type=int, default=0, help='手动指定开始的 Epoch (续训时填入断点)')
     # 如果你知道上次最好的 MAE，可以在命令行指定，防止好模型被覆盖。不知道就默认 0.0526 (你现在的最佳)
-    parser.add_argument('--prev_best_mae', type=float, default=0.0488, help='续训前的最佳验证集 MAE')
+    parser.add_argument('--prev_best_mae', type=float, default=0, help='续训前的最佳验证集 MAE')
     
     args = parser.parse_args()
     
@@ -64,7 +64,7 @@ def main():
     
     # 基础设置
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    output = os.path.join(args.output_dir, 'I2SB_3D_output_ema_ad_mci_nc_linear_att')
+    output = os.path.join(args.output_dir, 'I2SB_3D_output_ema_ad_mci_nc_linear_att2')
     log_dir = os.path.join(output, 'logs')
     os.makedirs(output, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)

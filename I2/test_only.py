@@ -38,7 +38,7 @@ def main():
     
     # 权重路径 (关键：指向你保存的 best_i2sb_model.pth)
     parser.add_argument('--model_path', type=str, required=True, help='预训练模型路径')
-    parser.add_argument('--output_dir', type=str, default="test_ema_results473", help='结果保存目录')
+    parser.add_argument('--output_dir', type=str, default="test_ema_results_adaml1", help='结果保存目录')
     
     # 采样参数 (建议保持和你训练时一致，例如 700)
     parser.add_argument('--timesteps', type=int, default=700, help='采样步数')
