@@ -49,7 +49,7 @@ def main():
     
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='学习率')
     parser.add_argument('--device', type=str, default='cuda', help='设备')
-    parser.add_argument('--val_interval', type=int, default=1, help='验证间隔')
+    parser.add_argument('--val_interval', type=int, default=2, help='验证间隔')
     parser.add_argument('--timesteps', type=int, default=600, help='扩散步数')
     parser.add_argument('--use_attention', action='store_true', help='是否开启Attention')
     

@@ -161,3 +161,61 @@ def structural_similarity_index(image_true, image_generated, data_range=1.0):
     
     # ssim_metric 返回的是 (B, 1) 的 tensor，我们需要平均值
     return ssim_val.mean()
+
+# import torch
+# import torch.nn.functional as F
+# from monai.metrics import SSIMMetric
+
+# def masked_mean_absolute_error(image_true, image_generated, mask):
+#     """
+#     支持 Batch 模式的 Masked MAE
+#     输入形状: (B, C, D, H, W)
+#     """
+#     mask = (mask > 0).float()
+#     # 1. 计算每个像素的绝对误差
+#     abs_diff = torch.abs(image_true - image_generated) * mask
+    
+#     # 2. 对每个样本独立求和 (dim=1,2,3,4 代表 C,D,H,W)
+#     sum_error_per_sample = abs_diff.sum(dim=(1, 2, 3, 4))
+#     sum_mask_per_sample = mask.sum(dim=(1, 2, 3, 4))
+    
+#     # 3. 计算每个样本的 MAE，然后取 Batch 平均
+#     mae_per_sample = sum_error_per_sample / (sum_mask_per_sample + 1e-8)
+#     return mae_per_sample.mean()
+
+# def masked_peak_signal_to_noise_ratio(image_true, image_generated, mask, data_range=1.0):
+#     """
+#     支持 Batch 模式的 Masked PSNR
+#     """
+#     mask = (mask > 0).float()
+#     # 1. 计算每个样本在 Mask 内的 MSE
+#     mse_map = torch.pow(image_true - image_generated, 2) * mask
+#     mse_per_sample = mse_map.sum(dim=(1, 2, 3, 4)) / (mask.sum(dim=(1, 2, 3, 4)) + 1e-8)
+    
+#     # 2. 数值稳定性
+#     eps = torch.finfo(mse_per_sample.dtype).eps
+#     mse_per_sample = torch.clamp(mse_per_sample, min=eps)
+    
+#     # 3. 计算每个样本的 PSNR 并平均
+#     psnr_per_sample = 10.0 * torch.log10((data_range ** 2) / mse_per_sample)
+#     return psnr_per_sample.mean()
+
+# def masked_structural_similarity_index(image_true, image_generated, mask, data_range=1.0):
+#     """
+#     支持 Batch 模式的 Masked SSIM
+#     """
+#     mask = (mask > 0).float()
+#     # 抹除背景干扰
+#     image_true_masked = image_true * mask
+#     image_generated_masked = image_generated * mask
+
+#     # MONAI 的 SSIMMetric 天生支持 Batch，返回 (B, 1) 的张量
+#     ssim_metric = SSIMMetric(spatial_dims=3, data_range=data_range, win_size=7)
+    
+#     # 确保维度对齐
+#     if image_true_masked.dim() == 4:
+#         image_true_masked = image_true_masked.unsqueeze(0)
+#         image_generated_masked = image_generated_masked.unsqueeze(0)
+
+#     ssim_values = ssim_metric(y_pred=image_generated_masked, y=image_true_masked)
+#     return ssim_values.mean() # 返回 Batch 的平均值

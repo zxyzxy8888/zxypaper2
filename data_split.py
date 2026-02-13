@@ -6,15 +6,15 @@ import math
 
 # ================= 配置区域 =================
 # 第一次运行的文件
-run1_split_csv = r'D:\zxyself\output\AD_vs_MCI\resnet18_QKV_gate_70143\fold_6_dataset_splits.csv'
-run1_pred_csv = r'D:\zxyself\output\AD_vs_MCI\resnet18_QKV_gate_70143\fold_6_test_prediction_details.csv'
+run1_split_csv = r'C:\Users\5090-13\Desktop\zxycode1\zxypaper2\output\output\AD_vs_MCI\resnet18_concat_cbam\fold_6_dataset_splits.csv'
+run1_pred_csv = r'C:\Users\5090-13\Desktop\zxycode1\zxypaper2\output\output\AD_vs_MCI\resnet18_concat_cbam\fold_6_test_prediction_details.csv'
 
 # 第二次运行的文件 (假设你换了随机种子跑了第二次，产生了fold_X...)
-run2_split_csv = r'D:\zxyself\output\AD_vs_MCI\resnet18_QKV_gate_701\fold_6_dataset_splits.csv'
-run2_pred_csv = r'D:\zxyself\output\AD_vs_MCI\resnet18_QKV_gate_701\fold_6_test_prediction_details.csv'
+run2_split_csv = r'C:\Users\5090-13\Desktop\zxycode1\zxypaper2\output\output\AD_vs_MCI\resnet18_QKV_gate_70143_2\fold_6_dataset_splits.csv'
+run2_pred_csv = r'C:\Users\5090-13\Desktop\zxycode1\zxypaper2\output\output\AD_vs_MCI\resnet18_QKV_gate_70143_2\fold_6_test_prediction_details.csv'
 
 # 输出的新划分文件路径
-output_new_split_csv = r'D:\zxyself\output\AD_vs_MCI\optimized_dataset_split2.csv'
+output_new_split_csv = r'C:\Users\5090-13\Desktop\zxycode1\zxypaper2\output\output\AD_vs_MCI\optimized_dataset_split4.csv'
 
 # 设定比例
 test_ratio_min = 0.1  # 测试集至少占 10%

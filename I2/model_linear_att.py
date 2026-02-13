@@ -268,7 +268,7 @@ class LinearAttentionBlock3D(nn.Module):
         v = v.reshape(b, self.num_heads, c // self.num_heads, n)
         # 3. 线性注意力核心 trick: softmax(Q) * (softmax(K)^T * V)
         # 这里的 softmax 是沿着 spatial 维度做的
-        q = q.softmax(dim=-1)
+        q = q.softmax(dim=-2)
         k = k.softmax(dim=-1)
         # 4. 先计算 K^T * V -> (B, Heads, Dim, Dim) -> 这是一个很小的全局上下文矩阵
         context = torch.einsum('bhdn,bhen->bhde', k, v)

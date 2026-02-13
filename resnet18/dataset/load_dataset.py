@@ -73,7 +73,7 @@ def get_paired_files_with_subjects(mri_dir, pet_dir, csv_path):
 
 
 def split_by_subject(paired_files, subject_to_files,
-                     train_ratio=0.7, val_ratio=0.15, random_state=2):
+                     train_ratio=0.7, val_ratio=0.15, random_state=42):
     """
     按完整 Subject ID 划分，确保同一 subject 的所有 scan 在同一集合。
     """

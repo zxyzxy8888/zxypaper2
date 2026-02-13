@@ -234,7 +234,7 @@ def main(args):
     '''load and process dataset'''
     '''split dataset and train'''
     # 统一输出目录
-    output_dir = os.path.join(r'D:\zxyself\output', f'{c1}_vs_{c2}', 'resnet18_QKV_gate_70143_2')
+    output_dir = os.path.join(r'D:\zxyself\output', f'{c1}_vs_{c2}', 'resnet18_QKV_gate_70143_4')
     os.makedirs(output_dir, exist_ok=True)
     print(f'📁 All outputs will be saved to: {output_dir}\n')
     
@@ -245,12 +245,12 @@ def main(args):
         #                                                                 "D:\zxyself\zxyself_traindata\AD_MCI2\mri_2_pet_mapping.csv")
         # train_files, val_files, test_files = split_by_subject(paired_files, subject_to_files, train_ratio=0.8,
         #                                                       val_ratio=0.1)
-        mri_dir = r"D:\zxyself\zxyself_traindata\AD_MCI2\MRI_Normalized"
-        pet_dir = r"D:\zxyself\zxyself_traindata\AD_MCI2\PET_Normalized"
+        mri_dir = r"C:\Users\5090-13\Desktop\zxycode1\zxypaper2\zxyself_traindata\zxyself_traindata\AD_MCI2\MRI_Normalized"
+        pet_dir = r"C:\Users\5090-13\Desktop\zxycode1\zxypaper2\zxyself_traindata\zxyself_traindata\AD_MCI2\PET_Normalized"
         
         # 🔥 关键修改：这里要指向你新生成的 optimized_dataset_split.csv
-        # 假设你的新 csv 在这里 (请根据实际情况修改路径)
-        csv_path = r"D:\zxyself\output\AD_vs_MCI\optimized_dataset_split2.csv"
+        # 使用目录中的具体文件 optimized_dataset_split.csv
+        csv_path = r"C:\Users\5090-13\Desktop\zxycode1\zxypaper2\output\output\AD_vs_MCI\optimized_dataset_split4.csv"
         # 2. 调用新函数直接获取分好的列表 (不再使用 split_by_subject)
         train_files, val_files, test_files = load_data_from_optimized_csv(csv_path, mri_dir, pet_dir)
         # ============================================================
@@ -309,7 +309,7 @@ def main(args):
         model = resnet18_3d(num_classes=2, input_channels=1, dropout_prob=0.35)
         optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr, weight_decay=args.weight_decay)
         start_epoch = 1
-        criterion_cls = FocalLoss(0.6,2)
+        criterion_cls = FocalLoss(0.83,2)
         if args.cuda:
             model = model.to(device)
             criterion_cls = criterion_cls.to(device)

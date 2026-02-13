@@ -57,7 +57,7 @@ class ResNet3D(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
 
-        self.dropout = nn.Dropout(p=dropout_prob)
+        self.dropout = nn.Dropout(p=0.5)
         self.fc = nn.Linear(512 * block.expansion, 256)
         self.classifier = nn.Linear(256, num_classes)
 
@@ -89,7 +89,7 @@ class ResNet3D(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        x=x[:, 1:2, ...]  # 只取第er个通道作为输入
+        x=x[:, 0:1, ...]  # 只取第0个通道作为输入
         x = self.conv1(x)     # [B, C, T, H, W]
         x = self.bn1(x)
         x = self.relu(x)

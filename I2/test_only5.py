@@ -55,7 +55,7 @@ def main():
     # test_files_subset = test_files[:args.num_samples]
     test_dataset = MRIPETDataset(test_files)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    logger.info(f"Test Subset Size: {len(test_files)} (Only first {args.num_samples} subjects)")
+    # logger.info(f"Test Subset Size: {len(test_files)} (Only first {args.num_samples} subjects)")
 
     # 2. 初始化模型
     betas = get_beta_schedule(0.0001, 0.02, args.timesteps)

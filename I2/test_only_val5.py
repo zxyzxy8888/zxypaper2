@@ -12,7 +12,7 @@ from split_dataset import get_paired_files_with_subjects, split_by_subject
 from performance_metric import mean_absolute_error, peak_signal_to_noise_ratio, structural_similarity_index
 
 # --- 核心组件 ---
-from model_linear_att import Image3DNet  
+from model_gate import Image3DNet  
 from i2_diffusion import Diffusion  
 
 def get_beta_schedule(beta_start, beta_end, num_diffusion_timesteps):
@@ -40,7 +40,7 @@ def main():
     parser.add_argument('--timesteps', type=int, default=700, help='采样步数')
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--use_attention', action='store_true')
-    parser.add_argument('--save_csv', type=str, default='ensemble_results_test_1_28.csv', help='保存详细结果的CSV路径')
+    parser.add_argument('--save_csv', type=str, default='ensemble_results_test_2-7_gate.csv', help='保存详细结果的CSV路径')
     args = parser.parse_args()
     
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
@@ -49,8 +49,6 @@ def main():
     logger.info("正在加载测试集...")
     paired_files, subject_to_files = get_paired_files_with_subjects(args.mri_dir, args.pet_dir, args.csv_path)
     train_files, val_files, test_files = split_by_subject(paired_files, subject_to_files, train_ratio=0.8, val_ratio=0.1)
-    
-    
     
     test_dataset = MRIPETDataset(test_files)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)

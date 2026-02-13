@@ -193,7 +193,7 @@ class dual_ResNet3D(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
         self.gate = ChannelGatedFusion(feature_dim=512, hidden_ratio=0.5)
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.45)
         self.classifier = nn.Linear(512, num_classes)
     def forward(self, x):
         x1= x[:,0:1,:,:,:]
