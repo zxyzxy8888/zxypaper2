@@ -2,7 +2,6 @@ import argparse
 import logging
 import os
 import random
-import datetime
 from pathlib import Path
 
 import numpy as np
@@ -41,7 +40,7 @@ def setup_logger(log_file: Path):
     return logger
 
 
-def build_opt(args, device, num_itr, ckpt_path: Path, run_stamp: str):
+def build_opt(args, device, num_itr, ckpt_path: Path):
     beta_max = args.beta_max
     if beta_max is None:
         beta_max = args.beta_end * args.timesteps
@@ -66,8 +65,7 @@ def build_opt(args, device, num_itr, ckpt_path: Path, run_stamp: str):
         T=args.T,
         ot_ode=args.ot_ode,
         eval_nfe=args.eval_nfe,
-        run_stamp=run_stamp,
-        tb_logdir=ckpt_path / f"tb_{run_stamp}",
+        tb_logdir=ckpt_path / "tb",
     )
     return opt
 
@@ -83,7 +81,6 @@ def main():
 
     parser.add_argument("--output_dir", type=str, default=r"D:\zxyself\output", help="输出目录")
     parser.add_argument("--exp_name", type=str, default="I2SB_runner", help="实验名")
-    parser.add_argument("--run_stamp", type=str, default=None, help="运行时间戳，默认自动生成")
 
     parser.add_argument("--num_epochs", type=int, default=200, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=2, help="训练 batch size")
@@ -117,13 +114,12 @@ def main():
     args = parser.parse_args()
 
     set_seed(args.seed)
-    run_stamp = args.run_stamp or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     ckpt_path = Path(args.output_dir) / args.exp_name
     ckpt_path.mkdir(parents=True, exist_ok=True)
 
-    log = setup_logger(ckpt_path / f"train_{run_stamp}.log")
+    log = setup_logger(ckpt_path / "train.log")
     log.info("Preparing dataset...")
 
     paired_files, subject_to_files = get_paired_files_with_subjects(args.mri_dir, args.pet_dir, args.csv_path)
@@ -166,10 +162,10 @@ def main():
         raise RuntimeError("Train loader is empty. Please check dataset paths and split ratios.")
 
     num_itr = args.num_epochs * len(train_loader)
-    opt = build_opt(args, device, num_itr, ckpt_path, run_stamp)
+    opt = build_opt(args, device, num_itr, ckpt_path)
 
     log.info(
-        f"Run config | stamp={run_stamp} | device={device} | epochs={args.num_epochs} | num_itr={num_itr} | "
+        f"Run config | device={device} | epochs={args.num_epochs} | num_itr={num_itr} | "
         f"batch={args.batch_size} | timesteps={args.timesteps}"
     )
 
