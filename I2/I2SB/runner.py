@@ -16,11 +16,30 @@ from itertools import cycle
 from pathlib import Path
 
 # 引入项目模块
-from . import util
-# 确保你的 network.py 中类名是 Image3DNet (根据上一轮修改)
-from .network import Image3DNet 
-from .diffusion import Diffusion
-import distributed_util as dist_util
+try:
+    from . import util
+    # 确保你的 network.py 中类名是 Image3DNet (根据上一轮修改)
+    from .network import Image3DNet
+    from .diffusion import Diffusion
+    from .performance_metric import (
+        mean_absolute_error,
+        peak_signal_to_noise_ratio,
+        structural_similarity_index,
+    )
+except Exception:
+    import util
+    from network import Image3DNet
+    from diffusion import Diffusion
+    from performance_metric import (
+        mean_absolute_error,
+        peak_signal_to_noise_ratio,
+        structural_similarity_index,
+    )
+
+try:
+    import distributed_util as dist_util
+except Exception:
+    dist_util = None
 
 # -----------------------------------------------------------------------------
 # 辅助函数 (Data Pre/Post Processing)
@@ -117,9 +136,10 @@ class Runner(object):
             log.info("Saved options pickle to {}!".format(opt_pkl_path))
 
         # 2. 构建 Diffusion (Beta Schedule)
-        # 前半部分是对称的，适配 I2SB/DDPM
+        # 对称 Beta 调度，长度严格等于 opt.interval（奇偶都兼容）
         betas = make_beta_schedule(n_timestep=opt.interval, linear_end=opt.beta_max / opt.interval)
-        betas = np.concatenate([betas[:opt.interval//2], np.flip(betas[:opt.interval//2])])
+        half = (opt.interval + 1) // 2
+        betas = np.concatenate([betas[:half], np.flip(betas[:half])])[:opt.interval]
         self.diffusion = Diffusion(betas, opt.device)
         log.info(f"[Diffusion] Initialized steps={len(betas)}")
 
@@ -130,7 +150,7 @@ class Runner(object):
             log, 
             noise_levels=noise_levels, 
             use_fp16=opt.use_fp16, 
-            cond=True,          # 必须开启 Condition (MRI -> PET)
+            cond=False,         # 标准 I2SB：不使用额外 cond 分支（MRI 作为端点 x1）
             image_size=96       # 对应 target_size
         )
         
@@ -151,6 +171,27 @@ class Runner(object):
 
         self.net.to(opt.device)
         self.ema.to(opt.device)
+
+    def _unpack_batch(self, batch):
+        """兼容不同 Dataset 返回格式，统一提取 (mri, pet)。"""
+        if isinstance(batch, (list, tuple)):
+            if len(batch) < 2:
+                raise ValueError("Batch must contain at least MRI and PET tensors.")
+            return batch[0], batch[1]
+        raise TypeError("Unsupported batch format. Expected tuple/list with MRI and PET.")
+
+    def _eval_nfe(self, opt, default_nfe=49):
+        """验证/测试的采样步数控制：优先使用配置，否则采用较快默认值。"""
+        if hasattr(opt, "eval_nfe") and opt.eval_nfe is not None:
+            return int(min(max(opt.eval_nfe, 1), opt.interval - 1))
+        return int(min(default_nfe, opt.interval - 1))
+
+    def _compute_metrics(self, pred_01, gt_01):
+        """在 [0,1] 空间计算 MAE / PSNR / SSIM。"""
+        mae = mean_absolute_error(gt_01, pred_01)
+        psnr = peak_signal_to_noise_ratio(gt_01, pred_01)
+        ssim = structural_similarity_index(gt_01, pred_01)
+        return mae, psnr, ssim
 
     def compute_label(self, step, x0, xt):
         """ 计算训练 Loss 的目标 (Eq 12) """
@@ -201,10 +242,12 @@ class Runner(object):
             # --- 1. 获取数据 ---
             # 直接从 DataLoader 获取 (MRI, PET)
             try:
-                mri, pet = next(train_iter)
+                batch = next(train_iter)
             except StopIteration:
                 train_iter = cycle(train_loader)
-                mri, pet = next(train_iter)
+                batch = next(train_iter)
+
+            mri, pet = self._unpack_batch(batch)
 
             mri = mri.to(opt.device)
             pet = pet.to(opt.device)
@@ -212,25 +255,21 @@ class Runner(object):
             # --- 2. 预处理 (插值到96 + 归一化-1~1) ---
             mri, pet = process_data(mri, pet, self.target_size)
             
-            x0 = pet   # 目标图像 (PET) [-1, 1]
-            cond = mri # 条件图像 (MRI) [-1, 1]
-            
-            # 起始噪声 x1 (标准高斯噪声)
-            # 这是 Conditional DDPM 的标准做法：从噪声开始，在 MRI 条件下生成 PET
-            x1 = torch.randn_like(x0)
+            x0 = pet   # 目标端点 x0 (PET) [-1, 1]
+            x1 = mri   # 源端点  x1 (MRI) [-1, 1]，标准 I2SB
 
             # --- 3. 扩散前向过程 ---
-            step = torch.randint(0, opt.interval, (x0.shape[0],))
+            step = torch.randint(0, opt.interval, (x0.shape[0],), device=opt.device)
             
-            # q_sample: 将 x0(PET) 和 x1(Noise) 混合得到 xt
+            # q_sample: 将端点 x0(PET) 和 x1(MRI) 混合得到 xt
             xt = self.diffusion.q_sample(step, x0, x1, ot_ode=opt.ot_ode)
             
             # 计算回归目标
             label = self.compute_label(step, x0, xt)
 
             # --- 4. 网络预测 ---
-            # 输入: xt (噪声图), step, cond (MRI)
-            pred = net(xt, step, cond=cond)
+            # 标准 I2SB：网络输入仅使用 xt 与 step（不额外输入 cond）
+            pred = net(xt, step)
             
             # --- 5. 反向传播 ---
             loss = F.mse_loss(pred, label)
@@ -253,7 +292,8 @@ class Runner(object):
             # 定期验证 (Validation)
             # 建议频率设置低一些，因为 3D 采样很慢
             if it % 2000 == 0 and it > 0:
-                val_mae = self.validate(opt, it, val_loader)
+                val_stats = self.validate(opt, it, val_loader)
+                val_mae = val_stats["mae"]
                 
                 # 仅在主进程保存最优模型
                 if opt.global_rank == 0:
@@ -275,13 +315,18 @@ class Runner(object):
         self.net.eval()
         
         total_mae = 0.0
+        total_psnr = 0.0
+        total_ssim = 0.0
         count = 0
+        eval_nfe = self._eval_nfe(opt, default_nfe=49)
         
         # 使用 EMA 权重进行生成，质量更好
         with self.ema.average_parameters():
-            for i, (mri, pet) in enumerate(val_loader):
+            for i, batch in enumerate(val_loader):
                 # 验证前 5 个 Batch 即可，节省时间
-                if i >= 5: break 
+                # if i >= 5: break 
+
+                mri, pet = self._unpack_batch(batch)
                 
                 mri = mri.to(opt.device)
                 pet = pet.to(opt.device)
@@ -289,20 +334,22 @@ class Runner(object):
                 # 预处理
                 mri, pet = process_data(mri, pet, self.target_size)
                 
-                # 采样起点：高斯噪声
-                x1 = torch.randn_like(pet)
+                # 采样起点：标准 I2SB 使用源端点 MRI 作为 x1
+                x1 = mri
                 
                 # 执行采样
                 # ddpm_sampling 返回轨迹列表，我们取最后一个 [-1] 即最终结果
-                _, pred_pet_traj = self.ddpm_sampling(opt, x1, cond=mri, verbose=False)
-                pred_pet = pred_pet_traj[-1] # Shape: [B, 1, D, H, W]
+                _, pred_pet_traj = self.ddpm_sampling(opt, x1, nfe=eval_nfe, verbose=False)
+                pred_pet = pred_pet_traj[:, -1].to(opt.device) # Shape: [B, 1, D, H, W]
                 
                 # 反归一化到 [0, 1] 用于计算指标
                 pred_01 = denormalize(pred_pet)
                 pet_01 = denormalize(pet)
-                
-                mae = F.l1_loss(pred_01, pet_01).item()
-                total_mae += mae
+
+                mae, psnr, ssim = self._compute_metrics(pred_01, pet_01)
+                total_mae += mae.item()
+                total_psnr += psnr.item()
+                total_ssim += ssim.item()
                 count += 1
                 
                 # TensorBoard 可视化 (只记录第一张图)
@@ -310,12 +357,18 @@ class Runner(object):
                     self.log_visuals(it, mri, pet, pred_pet, suffix="val")
 
         avg_mae = total_mae / max(count, 1)
+        avg_psnr = total_psnr / max(count, 1)
+        avg_ssim = total_ssim / max(count, 1)
         
         if opt.global_rank == 0:
             self.writer.add_scalar(it, 'val/MAE', avg_mae)
-            self.log.info(f"Validation MAE (0-1 scale): {avg_mae:.4f}")
+            self.writer.add_scalar(it, 'val/PSNR', avg_psnr)
+            self.writer.add_scalar(it, 'val/SSIM', avg_ssim)
+            self.log.info(
+                f"Validation (nfe={eval_nfe}) | MAE: {avg_mae:.4f}, PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.4f}"
+            )
             
-        return avg_mae
+        return {"mae": avg_mae, "psnr": avg_psnr, "ssim": avg_ssim}
 
     def log_visuals(self, it, mri, pet, pred, suffix=""):
         """ 记录切片图像到 TensorBoard """
@@ -361,12 +414,15 @@ class Runner(object):
         self.net.eval()
         self.log.info("=== Starting Test on Test Set ===")
         
-        total_mae = 0
-        total_psnr = 0
+        total_mae = 0.0
+        total_psnr = 0.0
+        total_ssim = 0.0
         n_batches = 0
+        eval_nfe = self._eval_nfe(opt, default_nfe=opt.interval - 1)
         
         with self.ema.average_parameters():
-            for i, (mri, pet) in enumerate(test_loader):
+            for i, batch in enumerate(test_loader):
+                mri, pet = self._unpack_batch(batch)
                 mri = mri.to(opt.device)
                 pet = pet.to(opt.device)
                 
@@ -374,40 +430,43 @@ class Runner(object):
                 mri, pet = process_data(mri, pet, self.target_size)
                 
                 # 采样起点
-                x1 = torch.randn_like(pet)
+                x1 = mri
                 
                 # 采样
-                _, pred_traj = self.ddpm_sampling(opt, x1, cond=mri, verbose=False)
-                pred_pet = pred_traj[-1]
+                _, pred_traj = self.ddpm_sampling(opt, x1, nfe=eval_nfe, verbose=False)
+                pred_pet = pred_traj[:, -1].to(opt.device)
                 
                 # 指标计算 (0-1 空间)
                 pred_01 = denormalize(pred_pet)
                 pet_01 = denormalize(pet)
+
+                mae, psnr, ssim = self._compute_metrics(pred_01, pet_01)
                 
-                mae = F.l1_loss(pred_01, pet_01).item()
-                mse = F.mse_loss(pred_01, pet_01).item()
-                # PSNR (Peak=1.0)
-                psnr = 20 * np.log10(1.0 / np.sqrt(mse)) if mse > 0 else 100
-                
-                total_mae += mae
-                total_psnr += psnr
+                total_mae += mae.item()
+                total_psnr += psnr.item()
+                total_ssim += ssim.item()
                 n_batches += 1
                 
                 if i % 10 == 0:
-                    self.log.info(f"Test Batch {i}: MAE={mae:.4f}, PSNR={psnr:.2f}")
+                    self.log.info(
+                        f"Test Batch {i}: MAE={mae.item():.4f}, PSNR={psnr.item():.2f}, SSIM={ssim.item():.4f}"
+                    )
 
         avg_mae = total_mae / max(n_batches, 1)
         avg_psnr = total_psnr / max(n_batches, 1)
+        avg_ssim = total_ssim / max(n_batches, 1)
         
         self.log.info(f"=== Final Test Results ===")
+        self.log.info(f"nfe:      {eval_nfe}")
         self.log.info(f"Avg MAE:  {avg_mae:.4f}")
         self.log.info(f"Avg PSNR: {avg_psnr:.4f}")
+        self.log.info(f"Avg SSIM: {avg_ssim:.4f}")
 
     # -------------------------------------------------------------------------
     # DDPM Sampling Core
     # -------------------------------------------------------------------------
     @torch.no_grad()
-    def ddpm_sampling(self, opt, x1, mask=None, cond=None, clip_denoise=True, nfe=None, log_count=10, verbose=True):
+    def ddpm_sampling(self, opt, x1, mask=None, clip_denoise=True, nfe=None, log_count=10, verbose=True):
         """ 执行推理生成 """
         nfe = nfe or opt.interval-1
         steps = util.space_indices(opt.interval, nfe+1)
@@ -418,7 +477,6 @@ class Runner(object):
             self.log.info(f"[Sampling] steps={opt.interval}, nfe={nfe}")
 
         x1 = x1.to(opt.device)
-        if cond is not None: cond = cond.to(opt.device)
 
         with self.ema.average_parameters():
             self.net.eval()
@@ -426,8 +484,8 @@ class Runner(object):
             def pred_x0_fn(xt, step):
                 # 构造时间步 Batch
                 step_ts = torch.full((xt.shape[0],), step, device=opt.device, dtype=torch.long)
-                # 网络预测
-                out = self.net(xt, step_ts, cond=cond)
+                # 网络预测（标准 I2SB: 无额外 cond）
+                out = self.net(xt, step_ts)
                 return self.compute_pred_x0(step, xt, out, clip_denoise=clip_denoise)
 
             xs, pred_x0 = self.diffusion.ddpm_sampling(

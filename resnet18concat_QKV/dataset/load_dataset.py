@@ -128,3 +128,66 @@ class MRIPETDataset(Dataset):
             input_tensor = self.transform(input_tensor)
 
         return input_tensor, label_tensor
+    
+    
+def load_data_from_optimized_csv(csv_path, mri_dir, pet_dir):
+    """
+    直接从含有 'Set' 列的 CSV 中读取数据，并按照 Train/Validation/Test 分好类。
+    """
+    print(f"📖 Loading data from: {csv_path}")
+    
+    # 读取 CSV
+    df = pd.read_csv(csv_path)
+    
+    # 清理列名空格 (防止 ' Set' 这种情况)
+    df.columns = df.columns.str.strip()
+    
+    # 检查是否有必要的列
+    required_cols = ['MRI', 'PET', 'Research Group', 'Set']
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"CSV文件缺少关键列: {col}。现有列: {df.columns}")
+
+    train_files = []
+    val_files = []
+    test_files = []
+
+    # 遍历每一行
+    for _, row in df.iterrows():
+        # 获取文件名并清理空格
+        mri_name = row['MRI'].strip()
+        pet_name = row['PET'].strip()
+        group = row['Research Group'].strip()
+        dataset_type = row['Set'].strip() # 获取 'Train', 'Validation', 'Test'
+
+        # 拼接完整路径
+        mri_path = os.path.join(mri_dir, mri_name)
+        pet_path = os.path.join(pet_dir, pet_name)
+
+        # 检查文件是否存在 (可选，为了安全)
+        if not os.path.exists(mri_path):
+            print(f"⚠️ Warning: MRI file not found: {mri_path}")
+            continue
+        if not os.path.exists(pet_path):
+            print(f"⚠️ Warning: PET file not found: {pet_path}")
+            continue
+
+        # 组合成元组
+        data_item = (mri_path, pet_path, group)
+
+        # 根据 Set 列进行分发
+        if dataset_type == 'Train':
+            train_files.append(data_item)
+        elif dataset_type == 'Validation': # 注意大小写要和CSV里一致
+            val_files.append(data_item)
+        elif dataset_type == 'Test':
+            test_files.append(data_item)
+        else:
+            print(f"⚠️ Unknown Set type: {dataset_type} for {mri_name}")
+
+    print(f"✅ Data loaded successfully!")
+    print(f"📊 Train: {len(train_files)}")
+    print(f"📊 Val:   {len(val_files)}")
+    print(f"📊 Test:  {len(test_files)}")
+
+    return train_files, val_files, test_files

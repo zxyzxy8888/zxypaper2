@@ -57,7 +57,7 @@ class ResNet3D(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
 
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.4)
         self.fc = nn.Linear(512 * block.expansion, 256)
         self.classifier = nn.Linear(256, num_classes)
 

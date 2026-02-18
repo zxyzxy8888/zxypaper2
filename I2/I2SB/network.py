@@ -19,7 +19,11 @@ except Exception:
         UNetModel = module.UNetModel
     else:
         from I2SB.unet import UNetModel
-from . import util
+
+try:
+    from . import util
+except Exception:
+    import util
 
 class Image3DNet(torch.nn.Module):
     def __init__(self, log, noise_levels, use_fp16=False, cond=True, image_size=96):

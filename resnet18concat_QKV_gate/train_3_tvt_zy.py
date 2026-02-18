@@ -21,7 +21,7 @@ from sklearn.metrics import (
     roc_auc_score, roc_curve
 )
 from dataset.load_dataset import MRIPETDataset, get_paired_files_with_subjects, split_by_subject,load_data_from_optimized_csv
-from resnet_QKV_gate import resnet18_3d
+from resnet_concat_QKV2 import resnet18_3d
 from configs import load_config
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import os

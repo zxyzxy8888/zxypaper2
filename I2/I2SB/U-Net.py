@@ -15,16 +15,28 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .fp16_util import convert_module_to_f16, convert_module_to_f32
-from .nn import (
-    checkpoint,
-    conv_nd,
-    linear,
-    avg_pool_nd,
-    zero_module,
-    normalization,
-    timestep_embedding,
-)
+try:
+    from .fp16_util import convert_module_to_f16, convert_module_to_f32
+    from .nn import (
+        checkpoint,
+        conv_nd,
+        linear,
+        avg_pool_nd,
+        zero_module,
+        normalization,
+        timestep_embedding,
+    )
+except Exception:
+    from fp16_util import convert_module_to_f16, convert_module_to_f32
+    from nn import (
+        checkpoint,
+        conv_nd,
+        linear,
+        avg_pool_nd,
+        zero_module,
+        normalization,
+        timestep_embedding,
+    )
 
 
 class TimestepBlock(nn.Module):
@@ -409,6 +421,7 @@ class UNetModel(nn.Module):
             nn.SiLU(),
             linear(time_embed_dim, time_embed_dim),
         )
+        print(f"UNetModel")
 
         if self.num_classes is not None:
             self.label_emb = nn.Embedding(num_classes, time_embed_dim)
@@ -438,6 +451,7 @@ class UNetModel(nn.Module):
                 # 检查当前分辨率 ds 是否在 attention_resolutions 列表中
                 # 例如：image_size=128, ds=16 -> 当前特征图大小 128/16 = 8
                 if (image_size // ds) in attention_resolutions:
+                    print(f"Adding Attention at resolution {image_size // ds} (ds={ds})")
                     layers.append(
                         AttentionBlock(
                             ch,

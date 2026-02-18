@@ -30,7 +30,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 count = 1
 c1 = 'AD'
 c2 = 'MCI'
-i = "resnet__QKV_gate"
+i = "resnet__QKV_add"
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -309,7 +309,7 @@ def main(args):
         model = resnet18_3d(num_classes=2, input_channels=1, dropout_prob=0.35)
         optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr, weight_decay=args.weight_decay)
         start_epoch = 1
-        criterion_cls = FocalLoss(0.83,2)
+        criterion_cls = FocalLoss(0.7,2)
         if args.cuda:
             model = model.to(device)
             criterion_cls = criterion_cls.to(device)
@@ -330,11 +330,11 @@ def main(args):
                 epoch, val_loader, model, criterion_cls, args)
             val_loss.append(current_val_loss)
              # 🔥 计算综合分数
-            current_score = (current_acc + current_sen + current_spe + current_auc) / 4
-            best_score = (global_acc + global_sen + global_spe + global_auc) / 4
+            current_score = (current_acc + current_sen) / 2
+            best_score = (global_acc + global_sen ) / 2
             # ✅ 保存规则：当前综合评分更高，则保存
             is_best = current_score > best_score
-            if is_best:
+            if is_best and current_acc > 0.6 and current_sen > 0.5:
                 global_acc = current_acc
                 global_sen = current_sen
                 global_spe = current_spe

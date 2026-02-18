@@ -166,7 +166,6 @@ class ModifiedSSFTTnet(nn.Module):
             nn.Linear(dim, 128),
             nn.LayerNorm(128),
             nn.ReLU())
-            # nn.Dropout(dropout)
         self.pred2 =nn.Linear(128, num_classes)
 
     def forward(self, x, mask=None):

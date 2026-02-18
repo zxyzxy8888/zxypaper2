@@ -21,7 +21,7 @@ from sklearn.metrics import (
     roc_auc_score, roc_curve
 )
 from dataset.load_dataset import MRIPETDataset, get_paired_files_with_subjects, split_by_subject,load_data_from_optimized_csv
-from SSFTTnet import ModifiedSSFTTnet
+from resnet_concat_QKV import resnet18_3d
 from configs import load_config
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import os
@@ -30,7 +30,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 count = 1
 c1 = 'AD'
 c2 = 'MCI'
-i = "SSFTT"
+i = "resnet__QKV_abs_concat"
+ACC_SEN_THRESHOLD = 0.55
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -230,27 +231,27 @@ def _test(test_loader, model, args):
     print(f'AUC: {auc:.4f}')
     return acc, sen, spe, auc, fpr, tpr, all_features, all_targets, all_preds, all_probs
 def main(args):
-    global count, c1, c2, m, path
+    global count, c1, c2
     '''load and process dataset'''
     '''split dataset and train'''
     # 统一输出目录
-    output_dir = os.path.join(r'D:\zxyself\output', f'{c1}_vs_{c2}', 'SSFTT')
+    output_dir = os.path.join(r'D:\zxyself\output', f'{c1}_vs_{c2}', 'resnet18_QKV_concat_abs')
     os.makedirs(output_dir, exist_ok=True)
     print(f'📁 All outputs will be saved to: {output_dir}\n')
     
     for i in [6]:
         train_loss = []
-        # paired_files, subject_to_files = get_paired_files_with_subjects("C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\MRI_Normalized",
-        #                                                                 "C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\PET_Normalized",
-        #                                                                 "C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\mri_2_pet_mapping.csv")
+        # paired_files, subject_to_files = get_paired_files_with_subjects("D:\zxyself\zxyself_traindata\AD_MCI2\MRI_Normalized",
+        #                                                                 "D:\zxyself\zxyself_traindata\AD_MCI2\PET_Normalized",
+        #                                                                 "D:\zxyself\zxyself_traindata\AD_MCI2\mri_2_pet_mapping.csv")
         # train_files, val_files, test_files = split_by_subject(paired_files, subject_to_files, train_ratio=0.8,
         #                                                       val_ratio=0.1)
-        mri_dir = r"C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\MRI_Normalized"
-        pet_dir = r"C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\PET_Normalized"
+        mri_dir = r"C:\Users\5090-13\Desktop\zxycode1\zxypaper2\zxyself_traindata\zxyself_traindata\AD_MCI2\MRI_Normalized"
+        pet_dir = r"C:\Users\5090-13\Desktop\zxycode1\zxypaper2\zxyself_traindata\zxyself_traindata\AD_MCI2\PET_Normalized"
         
         # 🔥 关键修改：这里要指向你新生成的 optimized_dataset_split.csv
-        # 假设你的新 csv 在这里 (请根据实际情况修改路径)
-        csv_path = r"D:\zxyself\output\AD_vs_MCI\resnet18_QKV_gate_70143_4\fold_6_dataset_splits.csv"
+        # 使用目录中的具体文件 optimized_dataset_split.csv
+        csv_path = r"C:\Users\5090-13\Desktop\zxycode1\zxypaper2\output\output\AD_vs_MCI\optimized_dataset_split4.csv"
         # 2. 调用新函数直接获取分好的列表 (不再使用 split_by_subject)
         train_files, val_files, test_files = load_data_from_optimized_csv(csv_path, mri_dir, pet_dir)
         # ============================================================
@@ -306,12 +307,10 @@ def main(args):
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True)
         test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True)
 
-        model = ModifiedSSFTTnet(in_channels=2, num_classes=2, num_tokens=4, dim=64, depth=1, heads=8, mlp_dim=8,
-                 dropout=0.4, emb_dropout=0.1)
+        model = resnet18_3d(num_classes=2, input_channels=1, dropout_prob=0.35)
         optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr, weight_decay=args.weight_decay)
         start_epoch = 1
-        criterion_cls = FocalLoss(0.78,2)
-        # criterion_cls = nn.CrossEntropyLoss(weight=torch.tensor([0.75, 0.25], device=device))  # 根据标签分布调整权重
+        criterion_cls = FocalLoss(0.74,2)
         if args.cuda:
             model = model.to(device)
             criterion_cls = criterion_cls.to(device)
@@ -320,11 +319,13 @@ def main(args):
         global_sen = 0.
         global_spe = 0.
         global_auc = 0.
-        global_epoch = 0.
-        val_loss = [] 
+        val_loss = []
+        best_score = -float('inf')
+        saved_checkpoints = []
         for epoch in range(start_epoch, args.epochs + 1):
             # 训练
-            loss = _train(epoch, train_loader, model, optimizer,criterion_cls,args)
+            loss = _train(epoch, train_loader, model, optimizer,
+                          criterion_cls,args)
             train_loss.append(loss)
             # 验证
             current_acc, current_sen, current_spe, current_auc, current_val_loss = _eval(
@@ -332,21 +333,44 @@ def main(args):
             val_loss.append(current_val_loss)
              # 🔥 计算综合分数
             current_score = (current_acc + current_sen + current_spe + current_auc) / 4
-            best_score = (global_acc + global_sen + global_spe + global_auc) / 4
-            # ✅ 保存规则：当前综合评分更高，则保存
-            is_best = current_score > best_score
-            if is_best and current_acc > 0.5 and current_sen > 0.4:  # 只有当准确率和敏感度都超过50%时才考虑保存模型
+            if current_score > best_score:
+                best_score = current_score
                 global_acc = current_acc
                 global_sen = current_sen
                 global_spe = current_spe
                 global_auc = current_auc
-                path = save_checkpoint(
-                    model=model, optimizer=optimizer, args=args, epoch=epoch,
-                    acc=current_acc, sen=current_sen, spe=current_spe, auc=current_auc,
-                    c1=c1, c2=c2, i=i, count=count, output_dir=output_dir)
-                print(f'✅ New best model saved! Score: {current_score:.4f} '
-                      f'(Acc: {global_acc:.4f}, Sen: {global_sen:.4f}, '
-                      f'Spe: {global_spe:.4f}, AUC: {global_auc:.4f})')
+
+            meets_threshold = (
+                current_acc >= ACC_SEN_THRESHOLD and
+                current_sen >= ACC_SEN_THRESHOLD 
+            )
+            if meets_threshold:
+                suffix = f'_epoch_{epoch}_acc_{current_acc:.3f}_sen_{current_sen:.3f}_spe_{current_spe:.3f}_auc_{current_auc:.3f}'
+                ckpt_path = save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    args=args,
+                    epoch=epoch,
+                    acc=current_acc,
+                    sen=current_sen,
+                    spe=current_spe,
+                    auc=current_auc,
+                    c1=c1,
+                    c2=c2,
+                    i=i,
+                    count=count,
+                    output_dir=output_dir,
+                    suffix=suffix
+                )
+                saved_checkpoints.append({
+                    'epoch': epoch,
+                    'path': ckpt_path,
+                    'val_acc': current_acc,
+                    'val_sen': current_sen,
+                    'val_spe': current_spe,
+                    'val_auc': current_auc
+                })
+                print(f'✅ Checkpoint saved (Acc {current_acc:.3f}, Sen {current_sen:.3f}) meets threshold {ACC_SEN_THRESHOLD}')
             # 学习率调整
             lr_scheduler.step()
             print(f'Current Learning Rate: {lr_scheduler.get_last_lr()}')
@@ -369,119 +393,144 @@ def main(args):
         plt.close()
         print(f'✅ Loss curve saved to: {loss_curve_path}')
         
-        # Test
-        checkpoints = torch.load(path, weights_only=False)
-        model.load_state_dict(checkpoints['model_state_dict'])
-        # 🔥 修改调用：接收额外的 all_preds 和 all_probs
-        acc, sen, spe, auc, fpr, tpr, test_features, test_targets, test_preds, test_probs = _test(
-             test_loader, model, args)
-        
-        # 保存测试集结果到文件
-        result_file = os.path.join(output_dir, f'i_{i}_test_results.txt')
-        with open(result_file, 'w', encoding='utf-8') as f:
-            f.write(f'Test Results for {c1} vs {c2} (Fold {i})\n')
-            f.write(f'{"="*50}\n')
-            f.write(f'Accuracy:    {acc:.4f}\n')
-            f.write(f'Sensitivity: {sen:.4f}\n')
-            f.write(f'Specificity: {spe:.4f}\n')
-            f.write(f'AUC:         {auc:.4f}\n')
-            f.write(f'{"="*50}\n')
-            f.write(f'Model Path: {path}\n')
-            f.write(f'Best Epoch: {checkpoints["epoch"]}\n')
-        print(f'✅ Test results saved to: {result_file}')
-        
-        
-        # ============================================================
-        # 🔥 新增功能 2：保存测试集详细预测结果到 CSV
-        # ============================================================
-        print("📝 Saving test predictions details to CSV...")
-        
-        test_results_list = []
-        # test_files 的顺序和 test_loader 是一致的 (因为 shuffle=False)
-        # test_preds, test_probs 的顺序也是一致的
-        
-        # 定义标签反向映射，方便看结果 (0->CN, 1->MCI)
-        # 注意：这里要确保和你 label_map 定义的一致
-        idx_to_label = {0: 'MCI', 1: 'AD'} 
-        
-        for idx, file_info in enumerate(test_files):
-            mri_name = os.path.basename(file_info[0])
-            pet_name = os.path.basename(file_info[1])
-            true_label_str = file_info[2] # 原始字符串标签
-            
-            # 获取模型预测
-            pred_idx = test_preds[idx]
-            pred_label_str = idx_to_label.get(pred_idx, str(pred_idx))
-            
-            # 获取预测概率 (假设第1列是 MCI 的概率)
-            mci_prob = test_probs[idx, 1] 
-            
-            # 判断是否预测正确
-            is_correct = (pred_idx == label_map[true_label_str])
-            
-            test_results_list.append({
-                'MRI': mri_name,
-                'PET': pet_name,
-                'True Group': true_label_str,
-                'Predicted Group': pred_label_str,
-                'Prediction Correct': is_correct,
-                'Probability (MCI)': f"{mci_prob:.4f}" # 保留4位小数
-            })
-            
-        df_test_preds = pd.DataFrame(test_results_list)
-        test_pred_path = os.path.join(output_dir, f'fold_{i}_test_prediction_details.csv')
-        df_test_preds.to_csv(test_pred_path, index=False)
-        print(f"✅ Test predictions saved to: {test_pred_path}")
-        # ============================================================
-        
-        # 绘制平均ROC曲线
-        plt.plot(fpr, tpr,
-                 label="AUC={0}".format(auc),
-                 color='blue', linewidth=2)
-        # 绘制对角线
-        plt.plot([0, 1], [0, 1], 'k--')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.legend(loc="lower right")
-        # 保存图形到文件
-        plt.savefig(os.path.join(output_dir, f'i_{i}_ROC_output.png'))
-        # 清除当前图形（可选，但推荐）
-        plt.close()
-        fpr_path = os.path.join(output_dir, f'i_{i}_fpr.mat')
-        tpr_path = os.path.join(output_dir, f'i_{i}_tpr.mat')
-        scio.savemat(fpr_path, {'Net_fpr': fpr})
-        scio.savemat(tpr_path, {'Net_tpr': tpr})
-        # UMAP降维和绘图
-        reducer = UMAP(
-            n_components=2,
-            n_neighbors=30,
-            min_dist=0.3,
-            metric='euclidean'
-        )
-        embedding = reducer.fit_transform(test_features)
-        # 创建图形
-        plt.figure(figsize=(10, 8))
-        # 分别绘制两类样本
-        colors = ['blue', 'red']
-        labels = ['MCI', 'AD']
-        for idx, (color, label) in enumerate(zip(colors, labels)):
-            indices = np.where(test_targets == idx)[0]  # 获取索引而不是布尔掩码
-            plt.scatter(embedding[indices, 0], embedding[indices, 1],
-                        c=color,
-                        label=label,
-                        alpha=0.7,
-                        s=100)
+        if not saved_checkpoints:
+            print(f'⚠️ No checkpoints met Acc and Sen >= {ACC_SEN_THRESHOLD}; skip test evaluation.')
+        else:
+            summary_rows = []
+            for ckpt in saved_checkpoints:
+                checkpoints = torch.load(ckpt['path'], weights_only=False)
+                model.load_state_dict(checkpoints['model_state_dict'])
+                acc, sen, spe, auc, fpr, tpr, test_features, test_targets, test_preds, test_probs = _test(
+                    test_loader, model, args)
 
-        plt.xlabel('UMAP-1')
-        plt.ylabel('UMAP-2')
-        # plt.title('UMAP visualization of ROIC')
-        plt.legend()
-        # 保存图片
-        save_path = os.path.join(output_dir, f'i_{i}_umap_{c1}_vs_{c2}.png')
-        plt.savefig(save_path, dpi=600, bbox_inches='tight')
-        plt.close()
+                result_file = os.path.join(output_dir, f'i_{i}_epoch_{ckpt["epoch"]}_test_results.txt')
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    f.write(f'Test Results for {c1} vs {c2} (Fold {i})\n')
+                    f.write(f'{"="*50}\n')
+                    f.write(f'Val Acc:      {ckpt["val_acc"]:.4f}\n')
+                    f.write(f'Val Sen:      {ckpt["val_sen"]:.4f}\n')
+                    f.write(f'Val Spe:      {ckpt["val_spe"]:.4f}\n')
+                    f.write(f'Val AUC:      {ckpt["val_auc"]:.4f}\n')
+                    f.write(f'{"-"*50}\n')
+                    f.write(f'Test Accuracy:    {acc:.4f}\n')
+                    f.write(f'Test Sensitivity: {sen:.4f}\n')
+                    f.write(f'Test Specificity: {spe:.4f}\n')
+                    f.write(f'Test AUC:         {auc:.4f}\n')
+                    f.write(f'{"="*50}\n')
+                    f.write(f'Model Path: {ckpt["path"]}\n')
+                    f.write(f'Checkpoint Epoch: {ckpt["epoch"]}\n')
+                print(f'✅ Test results saved to: {result_file}')
+
+                summary_rows.append({
+                    'epoch': ckpt['epoch'],
+                    'checkpoint': os.path.basename(ckpt['path']),
+                    'val_acc': ckpt['val_acc'],
+                    'val_sen': ckpt['val_sen'],
+                    'val_spe': ckpt['val_spe'],
+                    'val_auc': ckpt['val_auc'],
+                    'test_acc': acc,
+                    'test_sen': sen,
+                    'test_spe': spe,
+                    'test_auc': auc
+                })
+
+            summary_df = pd.DataFrame(summary_rows)
+            summary_csv_path = os.path.join(output_dir, f'i_{i}_test_summary.csv')
+            summary_df.to_csv(summary_csv_path, index=False)
+            print(f'✅ Test summary saved to: {summary_csv_path}')
+        
+        
+        # # ============================================================
+        # # 🔥 新增功能 2：保存测试集详细预测结果到 CSV
+        # # ============================================================
+        # print("📝 Saving test predictions details to CSV...")
+        
+        # test_results_list = []
+        # # test_files 的顺序和 test_loader 是一致的 (因为 shuffle=False)
+        # # test_preds, test_probs 的顺序也是一致的
+        
+        # # 定义标签反向映射，方便看结果 (0->CN, 1->MCI)
+        # # 注意：这里要确保和你 label_map 定义的一致
+        # idx_to_label = {0: 'MCI', 1: 'AD'} 
+        
+        # for idx, file_info in enumerate(test_files):
+        #     mri_name = os.path.basename(file_info[0])
+        #     pet_name = os.path.basename(file_info[1])
+        #     true_label_str = file_info[2] # 原始字符串标签
+            
+        #     # 获取模型预测
+        #     pred_idx = test_preds[idx]
+        #     pred_label_str = idx_to_label.get(pred_idx, str(pred_idx))
+            
+        #     # 获取预测概率 (假设第1列是 MCI 的概率)
+        #     mci_prob = test_probs[idx, 1] 
+            
+        #     # 判断是否预测正确
+        #     is_correct = (pred_idx == label_map[true_label_str])
+            
+        #     test_results_list.append({
+        #         'MRI': mri_name,
+        #         'PET': pet_name,
+        #         'True Group': true_label_str,
+        #         'Predicted Group': pred_label_str,
+        #         'Prediction Correct': is_correct,
+        #         'Probability (MCI)': f"{mci_prob:.4f}" # 保留4位小数
+        #     })
+            
+        # df_test_preds = pd.DataFrame(test_results_list)
+        # test_pred_path = os.path.join(output_dir, f'fold_{i}_test_prediction_details.csv')
+        # df_test_preds.to_csv(test_pred_path, index=False)
+        # print(f"✅ Test predictions saved to: {test_pred_path}")
+        # # ============================================================
+        
+        # # 绘制平均ROC曲线
+        # plt.plot(fpr, tpr,
+        #          label="AUC={0}".format(auc),
+        #          color='blue', linewidth=2)
+        # # 绘制对角线
+        # plt.plot([0, 1], [0, 1], 'k--')
+        # plt.xlim([0.0, 1.0])
+        # plt.ylim([0.0, 1.05])
+        # plt.xlabel('False Positive Rate')
+        # plt.ylabel('True Positive Rate')
+        # plt.legend(loc="lower right")
+        # # 保存图形到文件
+        # plt.savefig(os.path.join(output_dir, f'i_{i}_ROC_output.png'))
+        # # 清除当前图形（可选，但推荐）
+        # plt.close()
+        # fpr_path = os.path.join(output_dir, f'i_{i}_fpr.mat')
+        # tpr_path = os.path.join(output_dir, f'i_{i}_tpr.mat')
+        # scio.savemat(fpr_path, {'Net_fpr': fpr})
+        # scio.savemat(tpr_path, {'Net_tpr': tpr})
+        # # UMAP降维和绘图
+        # reducer = UMAP(
+        #     n_components=2,
+        #     n_neighbors=30,
+        #     min_dist=0.3,
+        #     metric='euclidean'
+        # )
+        # embedding = reducer.fit_transform(test_features)
+        # # 创建图形
+        # plt.figure(figsize=(10, 8))
+        # # 分别绘制两类样本
+        # colors = ['blue', 'red']
+        # labels = ['MCI', 'AD']
+        # for idx, (color, label) in enumerate(zip(colors, labels)):
+        #     indices = np.where(test_targets == idx)[0]  # 获取索引而不是布尔掩码
+        #     plt.scatter(embedding[indices, 0], embedding[indices, 1],
+        #                 c=color,
+        #                 label=label,
+        #                 alpha=0.7,
+        #                 s=100)
+
+        # plt.xlabel('UMAP-1')
+        # plt.ylabel('UMAP-2')
+        # # plt.title('UMAP visualization of ROIC')
+        # plt.legend()
+        # # 保存图片
+        # save_path = os.path.join(output_dir, f'i_{i}_umap_{c1}_vs_{c2}.png')
+        # plt.savefig(save_path, dpi=600, bbox_inches='tight')
+        # plt.close()
 
 if __name__ == '__main__':
     args = load_config()

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from QKV_relpe import CrossModalAttention3D
+from QKV import CrossModalAttention3D
 
 # -------------------------
 # 1. CBAM 3D模块定义
@@ -169,7 +169,7 @@ class dual_ResNet3D(nn.Module):
         self.bn_final = nn.BatchNorm3d(128)
         self.relu = nn.ReLU(inplace=True)
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
-        self.dropout = nn.Dropout(p=dropout_prob)
+        self.dropout = nn.Dropout(p=0.45)
         self.fc = nn.Linear(128, 128)
         self.classifier = nn.Linear(128, num_classes)
     def forward(self, x):

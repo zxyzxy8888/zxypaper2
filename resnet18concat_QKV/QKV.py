@@ -7,7 +7,7 @@ class CrossModalAttention3D(nn.Module):
     3D医学影像的交叉模态注意力模块
     支持MRI-PET双向交叉注意力
     """
-    def __init__(self, embed_dim=512, num_heads=4, mlp_ratio=4.0, dropout=0.1):
+    def __init__(self, embed_dim=512, num_heads=4, mlp_ratio=4.0, dropout=0.15):
         super().__init__()
         
         # ========== 基础参数 ==========
@@ -200,13 +200,13 @@ class CrossModalAttention3D(nn.Module):
         feat_mri_3d = feat_mri_ffn.permute(0, 2, 1).reshape(B, C, D, H, W)  # [B, 512, 4, 4, 4]
         feat_pet_3d = feat_pet_ffn.permute(0, 2, 1).reshape(B, C, D, H, W)
         
-        # # ========== 7. 空间融合卷积 ==========
-        feat_mri_spatial = self.spatial_fusion_mri(feat_mri_3d)
-        feat_pet_spatial = self.spatial_fusion_pet(feat_pet_3d)
+        # # # ========== 7. 空间融合卷积 ==========
+        # feat_mri_spatial = self.spatial_fusion_mri(feat_mri_3d)
+        # feat_pet_spatial = self.spatial_fusion_pet(feat_pet_3d)
         
         # 残差连接
-        enhanced_mri = feat_mri + feat_mri_spatial  # 与原始输入残差
-        enhanced_pet = feat_pet + feat_pet_spatial
+        enhanced_mri = feat_mri + feat_mri_3d  # 与原始输入残差
+        enhanced_pet = feat_pet + feat_pet_3d
         return enhanced_mri, enhanced_pet
 
 

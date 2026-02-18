@@ -10,9 +10,16 @@ from tqdm import tqdm
 from functools import partial
 import torch
 
-from .util import unsqueeze_xdim
+try:
+    from .util import unsqueeze_xdim
+except Exception:
+    from util import unsqueeze_xdim
 
-from ipdb import set_trace as debug
+try:
+    from ipdb import set_trace as debug
+except Exception:
+    def debug(*args, **kwargs):
+        return None
 
 def compute_gaussian_product_coef(sigma1, sigma2):
     """ Given p1 = N(x_t|x_0, sigma_1**2) and p2 = N(x_t|x_1, sigma_2**2)

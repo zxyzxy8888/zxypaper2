@@ -11,7 +11,7 @@ def load_config():
     parser.add_argument('--weight_decay', type=float, default=0.01)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--cuda', type=bool, default=True)
-    parser.add_argument('--epochs', type=int, default=40)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--resize', type=bool, default=True)
     parser.add_argument('--print_intervals', type=int, default=20)
     parser.add_argument('--evaluation', type=bool, default=None)
