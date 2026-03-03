@@ -7,18 +7,16 @@ import torch
 import torch.nn as nn
 import importlib.util
 from pathlib import Path
-
-try:
-    from .unet import UNetModel
-except Exception:
-    local_unet_hyphen = Path(__file__).with_name("U-Net.py")
-    if local_unet_hyphen.exists():
-        spec = importlib.util.spec_from_file_location("i2_i2sb_local_unet", str(local_unet_hyphen))
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        UNetModel = module.UNetModel
-    else:
-        from I2SB.unet import UNetModel
+from UNet_linearatt import UNetModel
+# except Exception:
+#     local_unet_hyphen = Path(__file__).with_name("U-Net.py")
+#     if local_unet_hyphen.exists():
+#         spec = importlib.util.spec_from_file_location("i2_i2sb_local_unet", str(local_unet_hyphen))
+#         module = importlib.util.module_from_spec(spec)
+#         spec.loader.exec_module(module)
+#         UNetModel = module.UNetModel
+#     else:
+#         from I2SB.unet import UNetModel
 
 try:
     from . import util
@@ -26,7 +24,7 @@ except Exception:
     import util
 
 class Image3DNet(torch.nn.Module):
-    def __init__(self, log, noise_levels, use_fp16=False, cond=True, image_size=96):
+    def __init__(self, log, noise_levels, use_fp16=False, cond=True, image_size=96, num_classes=3):
         """
         :param log: 日志记录器
         :param noise_levels: 噪声水平表 (Buffer)
@@ -50,12 +48,12 @@ class Image3DNet(torch.nn.Module):
             model_channels=64,            # 基础通道数，显存不够可改为 32
             out_channels=out_channels,
             num_res_blocks=2,             # 每个层级的残差块数量
-            attention_resolutions=(8,),   # 仅在极低分辨率(如8x8x8)使用Attention，防OOM
-            dropout=0,
+            attention_resolutions=(12),   # 仅在极低分辨率(如8x8x8)使用Attention，防OOM
+            dropout=0.,
             channel_mult=(1, 2, 4, 8),    # 通道倍增: 64 -> 128 -> 256 -> 512
             conv_resample=True,
             dims=3,                       # <--- 关键：开启 3D 模式
-            num_classes=None,             # 不使用类别引导
+            num_classes=num_classes,      # 通过标签进行类别引导
             use_checkpoint=True,          # <--- 关键：3D 训练强烈建议开启梯度检查点
             use_fp16=use_fp16,
             num_heads=4,
@@ -74,8 +72,9 @@ class Image3DNet(torch.nn.Module):
                  f"Size={util.count_parameters(self.diffusion_model)} parameters.")
         self.cond = cond
         self.noise_levels = noise_levels
+        self.num_classes = num_classes
 
-    def forward(self, x, steps, cond=None):
+    def forward(self, x, steps, cond=None, y=None):
         """
         :param x: 当前的 Noisy PET 图像 [B, 1, D, H, W]
         :param steps: 当前时间步索引 [B]
@@ -92,7 +91,7 @@ class Image3DNet(torch.nn.Module):
             x = torch.cat([x, cond], dim=1)
         
         # 前向传播
-        return self.diffusion_model(x, t)
+        return self.diffusion_model(x, t, y=y)
 
 
 class Image256Net(Image3DNet):

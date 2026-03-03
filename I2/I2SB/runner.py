@@ -231,7 +231,7 @@ class Runner(object):
         optimizer, sched = build_optimizer_sched(opt, net, log)
         
         # 将 DataLoader 转为无限循环迭代器
-        train_iter = cycle(train_loader)
+        train_iter = iter(train_loader)
 
         log.info(f"Start training for {opt.num_itr} iterations...")
         net.train()
@@ -244,7 +244,7 @@ class Runner(object):
             try:
                 batch = next(train_iter)
             except StopIteration:
-                train_iter = cycle(train_loader)
+                train_iter = iter(train_loader)
                 batch = next(train_iter)
 
             mri, pet = self._unpack_batch(batch)
@@ -292,6 +292,7 @@ class Runner(object):
             # 定期验证 (Validation)
             # 建议频率设置低一些，因为 3D 采样很慢
             if it % 2000 == 0 and it > 0:
+            # if it % 2000 == 0:
                 val_stats = self.validate(opt, it, val_loader)
                 val_mae = val_stats["mae"]
                 

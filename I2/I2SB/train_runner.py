@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from dataset import MRIPETDataset
 from split_dataset import get_paired_files_with_subjects, split_by_subject
-from runner import Runner
+from runner2 import Runner
 
 
 def set_seed(seed: int):
@@ -40,7 +40,7 @@ def setup_logger(log_file: Path):
     return logger
 
 
-def build_opt(args, device, num_itr, ckpt_path: Path):
+def build_opt(args, device, ckpt_path: Path):
     beta_max = args.beta_max
     if beta_max is None:
         beta_max = args.beta_end * args.timesteps
@@ -58,7 +58,7 @@ def build_opt(args, device, num_itr, ckpt_path: Path):
         l2_norm=args.weight_decay,
         lr_gamma=args.lr_gamma,
         lr_step=args.lr_step,
-        num_itr=num_itr,
+        num_epochs=args.num_epochs,
         interval=args.timesteps,
         beta_max=beta_max,
         t0=args.t0,
@@ -76,13 +76,10 @@ def main():
     parser.add_argument("--pet_dir", type=str, required=True, help="PET目录")
     parser.add_argument("--csv_path", type=str, required=True, help="CSV路径")
 
-    # 兼容你旧命令，当前 runner 流程不使用 mask_dir
-    parser.add_argument("--mask_dir", type=str, default=None, help="兼容参数，当前脚本不使用")
-
     parser.add_argument("--output_dir", type=str, default=r"D:\zxyself\output", help="输出目录")
     parser.add_argument("--exp_name", type=str, default="I2SB_runner", help="实验名")
 
-    parser.add_argument("--num_epochs", type=int, default=200, help="训练轮数")
+    parser.add_argument("--num_epochs", type=int, default=100, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=2, help="训练 batch size")
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader worker 数")
 
@@ -161,11 +158,10 @@ def main():
     if len(train_loader) == 0:
         raise RuntimeError("Train loader is empty. Please check dataset paths and split ratios.")
 
-    num_itr = args.num_epochs * len(train_loader)
-    opt = build_opt(args, device, num_itr, ckpt_path)
+    opt = build_opt(args, device, ckpt_path)
 
     log.info(
-        f"Run config | device={device} | epochs={args.num_epochs} | num_itr={num_itr} | "
+        f"Run config | device={device} | epochs={args.num_epochs} | "
         f"batch={args.batch_size} | timesteps={args.timesteps}"
     )
 

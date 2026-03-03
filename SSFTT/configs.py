@@ -3,7 +3,7 @@ import argparse
 
 def load_config():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--lr_g', type=float, default=0.01)

@@ -7,21 +7,35 @@ from sklearn.model_selection import train_test_split
 
 def load_pairing_csv(csv_path):
     """
-    读取配对 CSV 文件，返回 List[Tuple[str, str, str]]: [(mri_name, pet_name, research_group), ...]
+    读取配对 CSV 文件，返回 List[Tuple[str, str, str]]: [(mri_name, pet_name, class_label), ...]
+    兼容列名：优先匹配 MRI/PET/Research Group 等常见写法，否则使用前三列。
     """
     df = pd.read_csv(csv_path)
-    
+
     # 去除空行
     df = df.dropna()
-    
+
+    def _pick_column(df_obj, candidates, fallback_idx):
+        cols_lower = [c.lower().strip() for c in df_obj.columns]
+        for cand in candidates:
+            if cand.lower() in cols_lower:
+                return df_obj.columns[cols_lower.index(cand.lower())]
+        if len(df_obj.columns) > fallback_idx:
+            return df_obj.columns[fallback_idx]
+        raise ValueError(f"CSV 缺少列：{candidates}")
+
+    mri_col = _pick_column(df, ["mri", "mri_file", "mri filename"], 0)
+    pet_col = _pick_column(df, ["pet", "pet_file", "pet filename"], 1)
+    label_col = _pick_column(df, ["research group", "group", "label", "class"], 2)
+
     # 构建列表（而不是字典）
     pairing = []
     for _, row in df.iterrows():
-        mri_name = row['MRI'].strip()
-        pet_name = row['PET'].strip()
-        research_group = row['Research Group'].strip()
+        mri_name = str(row[mri_col]).strip()
+        pet_name = str(row[pet_col]).strip()
+        research_group = str(row[label_col]).strip()
         pairing.append((mri_name, pet_name, research_group))
-    
+
     return pairing
 
 

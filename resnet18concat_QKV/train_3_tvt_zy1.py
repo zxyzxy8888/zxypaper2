@@ -21,7 +21,7 @@ from sklearn.metrics import (
     roc_auc_score, roc_curve
 )
 from dataset.load_dataset import MRIPETDataset, get_paired_files_with_subjects, split_by_subject,load_data_from_optimized_csv
-from resnet_concat_QKV import resnet18_3d
+from resnet_concat_QKV1 import resnet18_3d
 from configs import load_config
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import os
@@ -30,7 +30,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 count = 1
 c1 = 'AD'
 c2 = 'MCI'
-i = "resnet__QKV_abs_concat"
+i = "resnet__QKV_rel_ffn"
 ACC_SEN_THRESHOLD = 0.55
 import torch
 import torch.nn as nn
@@ -235,7 +235,7 @@ def main(args):
     '''load and process dataset'''
     '''split dataset and train'''
     # 统一输出目录
-    output_dir = os.path.join(r'D:\zxyself\output', f'{c1}_vs_{c2}', 'resnet18_QKV_concat_abs')
+    output_dir = os.path.join(r'D:\zxyself\output', f'{c1}_vs_{c2}', 'resnet18_QKV_concat_rel_ffn')
     os.makedirs(output_dir, exist_ok=True)
     print(f'📁 All outputs will be saved to: {output_dir}\n')
     
@@ -307,10 +307,10 @@ def main(args):
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True)
         test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True)
 
-        model = resnet18_3d(num_classes=2, input_channels=1, dropout_prob=0.35)
+        model = resnet18_3d(num_classes=2, input_channels=1)
         optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr, weight_decay=args.weight_decay)
         start_epoch = 1
-        criterion_cls = FocalLoss(0.74,2)
+        criterion_cls = FocalLoss(0.7,2)
         if args.cuda:
             model = model.to(device)
             criterion_cls = criterion_cls.to(device)

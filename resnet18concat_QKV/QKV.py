@@ -200,13 +200,13 @@ class CrossModalAttention3D(nn.Module):
         feat_mri_3d = feat_mri_ffn.permute(0, 2, 1).reshape(B, C, D, H, W)  # [B, 512, 4, 4, 4]
         feat_pet_3d = feat_pet_ffn.permute(0, 2, 1).reshape(B, C, D, H, W)
         
-        # # # ========== 7. 空间融合卷积 ==========
-        # feat_mri_spatial = self.spatial_fusion_mri(feat_mri_3d)
-        # feat_pet_spatial = self.spatial_fusion_pet(feat_pet_3d)
+        # # ========== 7. 空间融合卷积 ==========
+        feat_mri_spatial = self.spatial_fusion_mri(feat_mri_3d)
+        feat_pet_spatial = self.spatial_fusion_pet(feat_pet_3d)
         
         # 残差连接
-        enhanced_mri = feat_mri + feat_mri_3d  # 与原始输入残差
-        enhanced_pet = feat_pet + feat_pet_3d
+        enhanced_mri = feat_mri + feat_mri_spatial  # 与空间融合后的输入残差
+        enhanced_pet = feat_pet + feat_pet_spatial
         return enhanced_mri, enhanced_pet
 
 

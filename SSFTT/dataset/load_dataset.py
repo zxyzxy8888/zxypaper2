@@ -73,7 +73,7 @@ def get_paired_files_with_subjects(mri_dir, pet_dir, csv_path):
 
 
 def split_by_subject(paired_files, subject_to_files,
-                     train_ratio=0.7, val_ratio=0.15, random_state=43):
+                     train_ratio=0.7, val_ratio=0.15, random_state=562):
     """
     按完整 Subject ID 划分，确保同一 subject 的所有 scan 在同一集合。
     """
@@ -100,7 +100,7 @@ def split_by_subject(paired_files, subject_to_files,
     print(f"test subjects: {test_subs}")
     return train_files, val_files, test_files
 # 标签映射
-label_map = {'MCI': 0, 'AD': 1}  # 01必须是健康到患病
+label_map = {'CN': 0, 'AD': 1}  # 01必须是健康到患病
 
 class MRIPETDataset(Dataset):
     def __init__(self, file_list, transform=None):

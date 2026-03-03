@@ -133,23 +133,23 @@ class CrossModalAttention3D(nn.Module):
         
         N = feat_mri_flat.shape[1]  # 动态计算patch数量
         
-        # ========== 2. 添加位置编码 ==========
-        # 第一次forward时动态初始化pos_embed
-        if not self.pos_embed_initialized:
-            self.pos_embed = nn.Parameter(
-                torch.randn(1, N, self.embed_dim, device=feat_mri.device, dtype=feat_mri.dtype)
-            )
-            nn.init.trunc_normal_(self.pos_embed, std=0.02)
-            self.pos_embed_initialized = True
+        # # ========== 2. 添加位置编码 ==========
+        # # 第一次forward时动态初始化pos_embed
+        # if not self.pos_embed_initialized:
+        #     self.pos_embed = nn.Parameter(
+        #         torch.randn(1, N, self.embed_dim, device=feat_mri.device, dtype=feat_mri.dtype)
+        #     )
+        #     nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        #     self.pos_embed_initialized = True
         
-        feat_mri_pos = feat_mri_flat + self.pos_embed  # [B, N, C]
-        feat_pet_pos = feat_pet_flat + self.pos_embed
+        # feat_mri_pos = feat_mri_flat + self.pos_embed  # [B, N, C]
+        # feat_pet_pos = feat_pet_flat + self.pos_embed
         
         # ========== 3. 交叉注意力: MRI←PET ==========
         # MRI作为Query，PET作为Key/Value
-        mri_q = self.mri_query(feat_mri_pos)  # [B, N, C]
-        pet_k = self.pet_key(feat_pet_pos)     # [B, N, C]
-        pet_v = self.pet_value(feat_pet_pos)   # [B, N, C]
+        mri_q = self.mri_query(feat_mri_flat)  # [B, N, C]
+        pet_k = self.pet_key(feat_pet_flat)     # [B, N, C]
+        pet_v = self.pet_value(feat_pet_flat)   # [B, N, C]
         
         # 重塑为多头
         mri_q = mri_q.reshape(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)  # [B, h, N, d]
@@ -170,9 +170,9 @@ class CrossModalAttention3D(nn.Module):
         feat_mri_cross = self.norm_mri_1(feat_mri_flat + feat_mri_attn)
         
         # ========== 4. 交叉注意力: PET←MRI ==========
-        pet_q = self.pet_query(feat_pet_pos)
-        mri_k = self.mri_key(feat_mri_pos)
-        mri_v = self.mri_value(feat_mri_pos)
+        pet_q = self.pet_query(feat_pet_flat)
+        mri_k = self.mri_key(feat_mri_flat)
+        mri_v = self.mri_value(feat_mri_flat)
         
         pet_q = pet_q.reshape(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         mri_k = mri_k.reshape(B, -1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)

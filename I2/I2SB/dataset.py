@@ -12,6 +12,16 @@ from torch.utils.data import Dataset
 import numpy as np
 import torch.nn.functional as F
 
+CLASS_TO_ID = {"AD": 0, "MCI": 1, "CN": 2}
+
+
+def _normalize_research_group(label):
+    """Convert string label like 'AD' to an integer id used for class guidance."""
+    key = str(label).strip().upper()
+    if key not in CLASS_TO_ID:
+        raise ValueError(f"Unknown class '{label}'. Expected one of {list(CLASS_TO_ID.keys())}.")
+    return CLASS_TO_ID[key]
+
 class MRIPETDataset(Dataset):
     """
     Docstring for MRIPETDataset
@@ -38,14 +48,14 @@ class MRIPETDataset(Dataset):
         mri = torch.from_numpy(mri).unsqueeze(0).unsqueeze(0)  # (1, 1, D, H, W)
         pet = torch.from_numpy(pet).unsqueeze(0).unsqueeze(0)
 
-        # 4. 处理尺寸：下采样 OR Padding
-        if self.target_shape is not None:
-            # 方案 A: 强制下采样 (针对 5090 显存优化)
-            # mode='trilinear' 是 3D 图像的标准插值方法
-            # align_corners=False 是默认推荐配置
-            mri = F.interpolate(mri, size=self.target_shape, mode='trilinear', align_corners=False)
-            pet = F.interpolate(pet, size=self.target_shape, mode='trilinear', align_corners=False)
-        # elif self.pad_multiple > 1:
+        # # 4. 处理尺寸：下采样 OR Padding
+        # if self.target_shape is not None:
+        #     # 方案 A: 强制下采样 (针对 5090 显存优化)
+        #     # mode='trilinear' 是 3D 图像的标准插值方法
+        #     # align_corners=False 是默认推荐配置
+        #     mri = F.interpolate(mri, size=self.target_shape, mode='trilinear', align_corners=False)
+        #     pet = F.interpolate(pet, size=self.target_shape, mode='trilinear', align_corners=False)
+        # # elif self.pad_multiple > 1:
         #     # 方案 B: 原始 Padding 逻辑 (保持分辨率)
         #     mri, _ = pad_to_multiple_of(mri, self.pad_multiple)
         #     pet, _ = pad_to_multiple_of(pet, self.pad_multiple)
@@ -69,7 +79,9 @@ class MRIPETDataset(Dataset):
         # print(f"After preprocessing - PET: {pet.shape}, range: [{pet.min():.6f}, {pet.max():.6f}]")
         # print(f"After preprocessing - PET non-zero: {torch.count_nonzero(pet).item()} / {pet.numel()}\n")
 
-        return mri, pet, research_group, mri_path, pet_path
+        class_id = torch.tensor(_normalize_research_group(research_group), dtype=torch.long)
+
+        return mri, pet, class_id, mri_path, pet_path
     
 def get_nonzero_bounding_box(data, threshold=0):
     """

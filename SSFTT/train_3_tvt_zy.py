@@ -29,7 +29,7 @@ os.environ['MPLBACKEND'] = 'Agg'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 count = 1
 c1 = 'AD'
-c2 = 'MCI'
+c2 = 'CN'
 i = "SSFTT"
 import torch
 import torch.nn as nn
@@ -240,19 +240,19 @@ def main(args):
     
     for i in [6]:
         train_loss = []
-        # paired_files, subject_to_files = get_paired_files_with_subjects("C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\MRI_Normalized",
-        #                                                                 "C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\PET_Normalized",
-        #                                                                 "C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\mri_2_pet_mapping.csv")
-        # train_files, val_files, test_files = split_by_subject(paired_files, subject_to_files, train_ratio=0.8,
-        #                                                       val_ratio=0.1)
-        mri_dir = r"C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\MRI_Normalized"
-        pet_dir = r"C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\PET_Normalized"
+        paired_files, subject_to_files = get_paired_files_with_subjects("C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_NC\\MRI_Normalized",
+                                                                        "C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_NC\\PET_Normalized",
+                                                                        "C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_NC\\mri_2_pet_mapping.csv")
+        train_files, val_files, test_files = split_by_subject(paired_files, subject_to_files, train_ratio=0.8,
+                                                              val_ratio=0.1)
+        # mri_dir = r"C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\MRI_Normalized"
+        # pet_dir = r"C:\\Users\\5090-13\\Desktop\\zxycode1\\zxypaper2\\zxyself_traindata\\zxyself_traindata\\AD_MCI2\\PET_Normalized"
         
-        # 🔥 关键修改：这里要指向你新生成的 optimized_dataset_split.csv
+        # # 🔥 关键修改：这里要指向你新生成的 optimized_dataset_split.csv
         # 假设你的新 csv 在这里 (请根据实际情况修改路径)
-        csv_path = r"D:\zxyself\output\AD_vs_MCI\resnet18_QKV_gate_70143_4\fold_6_dataset_splits.csv"
-        # 2. 调用新函数直接获取分好的列表 (不再使用 split_by_subject)
-        train_files, val_files, test_files = load_data_from_optimized_csv(csv_path, mri_dir, pet_dir)
+        # csv_path = r"D:\zxyself\output\AD_vs_MCI\resnet18_QKV_gate_70143_4\fold_6_dataset_splits.csv"
+        # # 2. 调用新函数直接获取分好的列表 (不再使用 split_by_subject)
+        # train_files, val_files, test_files = load_data_from_optimized_csv(csv_path, mri_dir, pet_dir)
         # ============================================================
         # 🔥 新增功能 1：保存训练集、验证集、测试集的文件列表到 CSV
         # ============================================================
@@ -290,7 +290,7 @@ def main(args):
         val_dataset = MRIPETDataset(val_files)
         test_dataset = MRIPETDataset(test_files)
         
-        label_map = {'MCI': 0, 'AD': 1}
+        label_map = {'CN': 0, 'AD': 1}
         # 检查标签分布
         train_labels = [label_map[label] for _, _, label in train_files]
         val_labels = [label_map[label] for _, _, label in val_files]
@@ -310,7 +310,7 @@ def main(args):
                  dropout=0.4, emb_dropout=0.1)
         optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr, weight_decay=args.weight_decay)
         start_epoch = 1
-        criterion_cls = FocalLoss(0.78,2)
+        criterion_cls = FocalLoss(0.75,2)
         # criterion_cls = nn.CrossEntropyLoss(weight=torch.tensor([0.75, 0.25], device=device))  # 根据标签分布调整权重
         if args.cuda:
             model = model.to(device)
@@ -400,9 +400,9 @@ def main(args):
         # test_files 的顺序和 test_loader 是一致的 (因为 shuffle=False)
         # test_preds, test_probs 的顺序也是一致的
         
-        # 定义标签反向映射，方便看结果 (0->CN, 1->MCI)
+        # 定义标签反向映射，方便看结果 (0->CN, 1->AD)
         # 注意：这里要确保和你 label_map 定义的一致
-        idx_to_label = {0: 'MCI', 1: 'AD'} 
+        idx_to_label = {0: 'CN', 1: 'AD'} 
         
         for idx, file_info in enumerate(test_files):
             mri_name = os.path.basename(file_info[0])
@@ -465,7 +465,7 @@ def main(args):
         plt.figure(figsize=(10, 8))
         # 分别绘制两类样本
         colors = ['blue', 'red']
-        labels = ['MCI', 'AD']
+        labels = ['CN', 'AD']
         for idx, (color, label) in enumerate(zip(colors, labels)):
             indices = np.where(test_targets == idx)[0]  # 获取索引而不是布尔掩码
             plt.scatter(embedding[indices, 0], embedding[indices, 1],
